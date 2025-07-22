@@ -14,7 +14,7 @@ frame_queue = Queue(maxsize=10)
 command_queue = Queue(maxsize=10)
 
 # YOLO 모델 로드
-yolo_model = YOLO('project_CAGE/templates/yolo11n.pt')  # 모델 파일 경로
+yolo_model = YOLO('cage-unitree-project/templates/yolo11n.pt')  # 모델 파일 경로
 
 
 # WebRTC 프레임 수신 시작 (명령 큐도 전달)
