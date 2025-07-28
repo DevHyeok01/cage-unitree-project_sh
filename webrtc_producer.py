@@ -8,6 +8,7 @@ from multiprocessing import Queue
 from go2_webrtc_connect.go2_webrtc_driver.webrtc_driver import Go2WebRTCConnection, WebRTCConnectionMethod
 from go2_webrtc_connect.go2_webrtc_driver.constants import RTC_TOPIC, SPORT_CMD
 from aiortc import MediaStreamTrack
+from go2_webrtc_connect.go2_webrtc_driver.util import TokenManager
 
 
 # 디버깅 
@@ -145,12 +146,15 @@ def start_webrtc(frame_queue, command_queue):
             await asyncio.sleep(0.1)  # 50ms마다 최신 값 전송
 
     async def main_webrtc():
+        token_manager = TokenManager()
+        token = token_manager.get_token()
         conn = Go2WebRTCConnection(
             WebRTCConnectionMethod.Remote,
             serialNumber=SERIAL_NUMBER,
             username=UNITREE_USERNAME,
             password=UNITREE_PASSWORD
         )
+        # 이후에도 토큰이 만료될 수 있으니, 필요시 token_manager.get_token()으로 갱신
         await conn.connect()
         conn.video.switchVideoChannel(True)
         conn.video.add_track_callback(recv_camera_stream)
