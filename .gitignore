@@ -3,3 +3,8 @@ __pycache__/
 
 # Ignore environment file
 .env
+
+# Ignore Python virtual environment folders
+venv/
+.venv/
+env/
