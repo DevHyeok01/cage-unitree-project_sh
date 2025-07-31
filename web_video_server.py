@@ -1,5 +1,7 @@
 import cv2
 import time
+import json
+import numpy as np
 from flask import Flask, Response, render_template, request, jsonify
 from multiprocessing import Queue
 from webrtc_producer import start_webrtc, send_command, ensure_normal_mode_once
@@ -15,6 +17,14 @@ command_queue = Queue(maxsize=10)
 
 # YOLO 모델 로드
 yolo_model = YOLO('project_CAGE/templates/yolo11n.pt')  # 모델 파일 경로
+
+# LiDAR 관련 전역 변수
+lidar_active = False
+lidar_data = {
+    'positions': [],
+    'point_count': 0,
+    'timestamp': time.time()
+}
 
 
 # WebRTC 프레임 수신 시작 (명령 큐도 전달)
@@ -78,12 +88,74 @@ def joystick():
 
 @app.route('/start_control', methods=['POST'])
 def start_control():
-    ok = ensure_normal_mode_once()
-    return jsonify({'status': 'ok' if ok else 'fail'})
+    try:
+        command_queue.put("start_control")
+        return jsonify({'status': 'success', 'message': 'Remote control started'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+@app.route('/lidar_data', methods=['GET'])
+def get_lidar_data():
+    """LiDAR 포인트 클라우드 데이터 반환"""
+    global lidar_data, lidar_active
+    
+    if not lidar_active:
+        return jsonify({
+            'positions': [],
+            'point_count': 0,
+            'timestamp': time.time()
+        })
+    
+    # 모의 LiDAR 데이터 생성 (실제 LiDAR 연결 시 실제 데이터로 대체)
+    current_time = time.time()
+    positions = []
+    
+    # 원형 패턴의 포인트 클라우드 생성
+    for i in range(360):
+        angle = np.radians(i)
+        distance = 2.0 + 0.5 * np.sin(current_time + angle * 4)  # 시간에 따라 변화하는 거리
+        x = distance * np.cos(angle)
+        y = distance * np.sin(angle)
+        z = 0.1 * np.sin(current_time * 2 + angle * 8)  # 약간의 높이 변화
+        positions.extend([x, y, z])
+    
+    # 추가 랜덤 포인트들
+    for _ in range(100):
+        x = (np.random.random() - 0.5) * 6
+        y = (np.random.random() - 0.5) * 6
+        z = np.random.random() * 0.5
+        positions.extend([x, y, z])
+    
+    lidar_data = {
+        'positions': positions,
+        'point_count': len(positions) // 3,
+        'timestamp': current_time
+    }
+    
+    return jsonify(lidar_data)
+
+@app.route('/toggle_lidar', methods=['POST'])
+def toggle_lidar():
+    """LiDAR 활성화/비활성화 토글"""
+    global lidar_active
+    
+    try:
+        lidar_active = not lidar_active
+        status = "active" if lidar_active else "inactive"
+        return jsonify({
+            'status': 'success',
+            'lidar_active': lidar_active,
+            'message': f'LiDAR is now {status}'
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
     
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5015, debug=False)
+    app.run(host='0.0.0.0', port=5010, debug=False)
 
 
 '''

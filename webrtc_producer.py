@@ -187,3 +187,4 @@ if __name__ == "__main__":
             time.sleep(0.01)
         direction = input("Enter direction (sitdown/situp): ")
         send_command(command_queue, direction)
+
