@@ -16,7 +16,7 @@ frame_queue = Queue(maxsize=10)
 command_queue = Queue(maxsize=10)
 
 # YOLO 모델 로드
-yolo_model = YOLO('templates/yolo11n.pt')  # 모델 파일 경로
+yolo_model = YOLO('project_CAGE/templates/yolo11n.pt')  # 모델 파일 경로
 
 # LiDAR 관련 전역 변수
 lidar_active = False
