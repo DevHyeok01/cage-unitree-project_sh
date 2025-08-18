@@ -1,3 +1,4 @@
+import logging
 import hashlib
 import json
 import random
@@ -83,71 +84,47 @@ def print_status(status_type, status_message):
     current_time = time.strftime("%H:%M:%S")
     print(f"🕒 {status_type:<25}: {status_message:<15} ({current_time})")
 
-TOKEN_FILE = os.path.expanduser("~/cage/cage-unitree-project/.unitree_token")
-
 class TokenManager:
-    def __init__(self):
-        self.email = os.getenv("UNITREE_USERNAME")
-        self.password = os.getenv("UNITREE_PASSWORD")
-        self.token = self._load_token()
-        if self.token:
-            try:
-                payload = jwt.decode(self.token, options={"verify_signature": False})
-                exp = payload.get("exp", 0)
-                now = time.time()
-                remain = exp - now
-                if remain > 0:
-                    print(f"[TokenManager] .unitree_token 파일에서 토큰을 정상적으로 불러왔습니다.")
-                    print(f"[TokenManager] 토큰 만료까지 남은 시간: {int(remain)}초 ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(exp))} 만료)")
-                else:
-                    print(f"[TokenManager] 불러온 토큰이 이미 만료되었습니다. ({time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(exp))} 만료)")
-                    self._delete_token()
-                    self.token = None
-            except Exception as e:
-                print(f"[TokenManager] 토큰 파싱 실패: {e}")
-                self._delete_token()
-                self.token = None
-        else:
-            print("[TokenManager] .unitree_token 파일에서 토큰을 불러오지 못했습니다.")
+    def __init__(self, token_path='.unitree_token'):
+        # 프로젝트 루트 디렉토리를 기준으로 token_path 설정
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        self.token_path = os.path.join(project_root, token_path)
 
-    def _load_token(self):
-        if os.path.exists(TOKEN_FILE):
-            with open(TOKEN_FILE, "r") as f:
-                return f.read().strip()
-        return None
-
-    def _save_token(self, token):
-        with open(TOKEN_FILE, "w") as f:
-            f.write(token)
-
-    def _delete_token(self):
-        if os.path.exists(TOKEN_FILE):
-            os.remove(TOKEN_FILE)
-        self.token = None
-
-    def is_expired(self):
-        if not self.token:
-            return True
+    def save_token(self, token):
+        """토큰을 파일에 저장합니다."""
         try:
-            payload = jwt.decode(self.token, options={"verify_signature": False})
-            exp = payload.get("exp", 0)
-            if time.time() > exp - 60:
-                return True
-            return False
-        except Exception:
-            return True
+            with open(self.token_path, 'w') as f:
+                f.write(token)
+            logging.info(f"토큰이 '{self.token_path}' 파일에 저장되었습니다.")
+        except IOError as e:
+            logging.error(f"토큰 파일 저장 중 오류 발생: {e}")
 
-    def fetch_token(self):
-        token = fetch_token(self.email, self.password)
-        if token:
-            self.token = token
-            self._save_token(token)
-        return self.token
-
-    def get_token(self):
-        if self.token:
-            return self.token
-        else:
+    def load_token(self):
+        """파일에서 토큰을 불러옵니다. 파일이 없으면 None을 반환합니다."""
+        if not os.path.exists(self.token_path):
+            logging.info(f"저장된 토큰 파일('{self.token_path}')을 찾을 수 없습니다.")
             return None
+        try:
+            with open(self.token_path, 'r') as f:
+                token = f.read().strip()
+                if token:
+                    logging.info(f"'{self.token_path}' 파일에서 토큰을 불러왔습니다.")
+                    return token
+                else:
+                    logging.warning(f"토큰 파일('{self.token_path}')이 비어있습니다.")
+                    self.delete_token() # 파일이 비어있으면 삭제
+                    return None
+        except IOError as e:
+            logging.error(f"토큰 파일 로드 중 오류 발생: {e}")
+            return None
+
+    def delete_token(self):
+        """토큰 파일을 삭제합니다."""
+        if os.path.exists(self.token_path):
+            try:
+                os.remove(self.token_path)
+                logging.info(f"기존 토큰 파일('{self.token_path}')을 삭제했습니다.")
+            except OSError as e:
+                logging.error(f"토큰 파일 삭제 중 오류 발생: {e}")
 
 

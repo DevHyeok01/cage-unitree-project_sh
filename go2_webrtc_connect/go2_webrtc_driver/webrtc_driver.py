@@ -20,18 +20,53 @@ class Go2WebRTCConnection:
         self.pc = None
         self.sn = serialNumber
         self.ip = ip
+        self.username = username
+        self.password = password
         self.connectionMethod = connectionMethod
         self.isConnected = False
-
-        # TokenManager를 사용하여 토큰을 불러오고, 없거나 만료되었을 때만 새로 발급
-        self.token_manager = TokenManager()
-        self.token = self.token_manager.get_token()
+        self.token_manager = TokenManager() # 개선된 TokenManager 인스턴스 생성
+        self.token = None
+        self.public_key = None
 
     async def connect(self):
         print_status("WebRTC connection", "🟡 started")
         if self.connectionMethod == WebRTCConnectionMethod.Remote:
             self.public_key = fetch_public_key()
+            if not self.public_key:
+                raise Exception("Failed to fetch public key from server.")
+
+            # 1. 시도: 저장된 토큰 로드
+            self.token = self.token_manager.load_token()
+
+            # 2. 검증: 토큰이 있으면 유효성 검사
+            if self.token:
+                print_status("Token", "🔵 Found saved token, verifying...")
+                turn_server_info = fetch_turn_server_info(self.sn, self.token, self.public_key)
+                
+                # 3. 대처: 토큰이 유효하지 않으면 새로 발급
+                if turn_server_info is None:
+                    print_status("Token", "🔴 Invalid or expired, fetching a new one.")
+                    self.token = fetch_token(self.username, self.password)
+                    if self.token:
+                        # 4. 갱신: 새 토큰 저장
+                        self.token_manager.save_token(self.token)
+                    else:
+                        raise Exception("Failed to fetch a new token after validation failure.")
+            else:
+                # 토큰이 없으면 새로 발급
+                print_status("Token", "🟡 Not found, fetching a new one.")
+                self.token = fetch_token(self.username, self.password)
+                if self.token:
+                    # 4. 갱신: 새 토큰 저장
+                    self.token_manager.save_token(self.token)
+                else:
+                    raise Exception("Failed to fetch a new token.")
+
+            # 최종적으로 유효한 TURN 서버 정보 다시 가져오기
             turn_server_info = fetch_turn_server_info(self.sn, self.token, self.public_key)
+            if not turn_server_info:
+                raise Exception("Failed to get TURN server info even with a new token.")
+
             await self.init_webrtc(turn_server_info)
         elif self.connectionMethod == WebRTCConnectionMethod.LocalSTA:
             if not self.ip and self.sn:

@@ -103,6 +103,18 @@ def start_webrtc(frame_queue, command_queue):
                         RTC_TOPIC["SPORT_MOD"],
                         {"api_id": SPORT_CMD["BalanceStand"]}
                     )
+                elif direction == "hello":
+                    print("Performing 'Hello' movement...")
+                    await conn.datachannel.pub_sub.publish_request_new(
+                        RTC_TOPIC["SPORT_MOD"],
+                        {"api_id": SPORT_CMD["Hello"]}
+                    )
+                elif direction == "sit":
+                    print("Performing 'Sit' movement...")
+                    await conn.datachannel.pub_sub.publish_request_new(
+                        RTC_TOPIC["SPORT_MOD"],
+                        {"api_id": SPORT_CMD["Sit"]}
+                    )
                 # 기타 명령은 필요시 추가
             # 최신 조이스틱 값만 사용
             if latest_joystick is not None:
