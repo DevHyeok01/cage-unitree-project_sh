@@ -9,6 +9,14 @@ import threading
 from ultralytics import YOLO  # YOLO 모델 임포트
 import logging
 
+# 뎁스 카메라
+try:
+    import pyrealsense2 as rs
+    realsense_available = True
+except ImportError:
+    realsense_available = False
+    rs = None
+
 logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__, template_folder='templates')
@@ -62,10 +70,52 @@ def generate():
         else:
             time.sleep(0.01)
 
+# 뎁스 카메라 프레임 생성
+def generate_depth():
+    if not realsense_available:
+        while True:
+            # 에러 이미지 반환
+            img = np.zeros((240,320,3), np.uint8)
+            cv2.putText(img, "No RealSense", (30,120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+            ret, jpeg = cv2.imencode('.jpg', img)
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+            time.sleep(0.1)
+    pipeline = rs.pipeline()
+    config = rs.config()
+    config.enable_stream(rs.stream.depth, 320, 240, rs.format.z16, 30)
+    config.enable_stream(rs.stream.color, 320, 240, rs.format.bgr8, 30)
+    pipeline.start(config)
+    try:
+        while True:
+            frames = pipeline.wait_for_frames()
+            depth_frame = frames.get_depth_frame()
+            color_frame = frames.get_color_frame()
+            if not depth_frame or not color_frame:
+                continue
+            # 뎁스 이미지를 컬러맵으로 변환
+            depth_image = np.asanyarray(depth_frame.get_data())
+            color_image = np.asanyarray(color_frame.get_data())
+            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+            # 두 이미지를 좌우로 합침
+            images = np.hstack((color_image, depth_colormap))
+            ret, jpeg = cv2.imencode('.jpg', images)
+            if not ret:
+                continue
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+    finally:
+        pipeline.stop()
+
+
+# 카메라 모드에 따라 스트림 분기
 @app.route('/video_feed')
 def video_feed():
-    return Response(generate(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+    mode = request.args.get('mode', 'go2')
+    if mode == 'depth':
+        return Response(generate_depth(), mimetype='multipart/x-mixed-replace; boundary=frame')
+    else:
+        return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route('/')
 def index():
